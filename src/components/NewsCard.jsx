@@ -1,4 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import LikeDislike from './LikeDislike';
+import { getArticleComments, submitArticleComment, translateText } from '../services/intelApi';
+import { resolveArticleId } from '../services/reactionManager';
 
 function formatPublishedTime(value) {
   if (!value) return 'Unknown time';
@@ -24,18 +27,126 @@ function truncate(text, maxLength = 180) {
   return `${text.slice(0, maxLength).trimEnd()}...`;
 }
 
-export default function NewsCard({ article, index }) {
+export default function NewsCard({ article, index, targetLanguage = 'en' }) {
   const riskLabel = article.riskLabel || buildRiskLabel(index);
-  const [likes, setLikes] = useState(0);
-  const [dislikes, setDislikes] = useState(0);
+  const articleId = useMemo(() => resolveArticleId(article), [article]);
   const [commentInput, setCommentInput] = useState('');
   const [comments, setComments] = useState([]);
+  const [displayComments, setDisplayComments] = useState([]);
+  const [commentError, setCommentError] = useState('');
+  const [commentLoading, setCommentLoading] = useState(false);
+  const [commentTranslateLoading, setCommentTranslateLoading] = useState(false);
 
-  const addComment = () => {
+  useEffect(() => {
+    let active = true;
+
+    const loadComments = async () => {
+      try {
+        const response = await getArticleComments(articleId);
+        if (!active) return;
+        setComments(response.comments || []);
+      } catch {
+        if (!active) return;
+        setComments([]);
+      }
+    };
+
+    loadComments();
+
+    return () => {
+      active = false;
+    };
+  }, [articleId]);
+
+  useEffect(() => {
+    let active = true;
+
+    const translateComments = async () => {
+      if (targetLanguage === 'en') {
+        if (active) {
+          setDisplayComments(comments);
+          setCommentTranslateLoading(false);
+        }
+        return;
+      }
+
+      if (!comments.length) {
+        if (active) {
+          setDisplayComments([]);
+          setCommentTranslateLoading(false);
+        }
+        return;
+      }
+
+      if (active) {
+        setCommentTranslateLoading(true);
+      }
+
+      const translatedComments = await Promise.all(
+        comments.map(async (comment) => {
+          if (!comment.commentText) return comment;
+
+          try {
+            const response = await translateText({ text: comment.commentText, targetLang: targetLanguage });
+            return {
+              ...comment,
+              translatedCommentText: response.translated_text || comment.commentText,
+            };
+          } catch {
+            return {
+              ...comment,
+              translatedCommentText: comment.commentText,
+            };
+          }
+        }),
+      );
+
+      if (active) {
+        setDisplayComments(translatedComments);
+        setCommentTranslateLoading(false);
+      }
+    };
+
+    translateComments();
+
+    return () => {
+      active = false;
+    };
+  }, [comments, targetLanguage]);
+
+  const addComment = async () => {
     const trimmed = commentInput.trim();
-    if (!trimmed) return;
-    setComments((prev) => [...prev, trimmed]);
+    if (!trimmed) {
+      setCommentError('Comment cannot be empty.');
+      return;
+    }
+    if (trimmed.length > 300) {
+      setCommentError('Comment must be at most 300 characters.');
+      return;
+    }
+
+    setCommentError('');
+    setCommentLoading(true);
+
+    try {
+      const response = await submitArticleComment({ articleId, commentText: trimmed });
+      const createdComment = response.comment;
+      setComments((prev) => [createdComment, ...prev]);
+    } catch (error) {
+      setCommentError(error.message || 'Failed to post comment.');
+      setCommentLoading(false);
+      return;
+    }
+
+    setCommentLoading(false);
     setCommentInput('');
+  };
+
+  const onCommentInputChange = (event) => {
+    setCommentInput(event.target.value);
+    if (commentError) {
+      setCommentError('');
+    }
   };
 
   return (
@@ -71,22 +182,7 @@ export default function NewsCard({ article, index }) {
         Read Article →
       </a>
 
-      <div className="mt-4 flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          onClick={() => setLikes((prev) => prev + 1)}
-          className="rounded-lg bg-cyan-100 px-3 py-1.5 text-xs font-semibold text-cyan-800 transition duration-300 hover:bg-cyan-200 dark:bg-cyan-500/20 dark:text-cyan-100 dark:hover:bg-cyan-500/35"
-        >
-          Like ({likes})
-        </button>
-        <button
-          type="button"
-          onClick={() => setDislikes((prev) => prev + 1)}
-          className="rounded-lg bg-rose-100 px-3 py-1.5 text-xs font-semibold text-rose-800 transition duration-300 hover:bg-rose-200 dark:bg-rose-500/20 dark:text-rose-100 dark:hover:bg-rose-500/35"
-        >
-          Dislike ({dislikes})
-        </button>
-      </div>
+      <LikeDislike article={article} />
 
       <div className="mt-4">
         <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600 transition-colors duration-300 dark:text-slate-400">
@@ -96,26 +192,42 @@ export default function NewsCard({ article, index }) {
           <input
             type="text"
             value={commentInput}
-            onChange={(event) => setCommentInput(event.target.value)}
+            maxLength={300}
+            onChange={onCommentInputChange}
             placeholder="Add your insight..."
             className="w-full rounded-lg border border-gray-300 bg-white px-2.5 py-2 text-xs text-slate-900 outline-none transition duration-300 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-300/40 dark:border-slate-600 dark:bg-slate-800/80 dark:text-slate-100 dark:focus:border-cyan-300 dark:focus:ring-cyan-400/30"
           />
           <button
             type="button"
             onClick={addComment}
+            disabled={commentLoading}
             className="rounded-lg bg-gradient-to-r from-purple-600 to-cyan-500 px-3 py-2 text-xs font-semibold text-white transition hover:brightness-110"
           >
-            Post
+            {commentLoading ? 'Posting...' : 'Post'}
           </button>
         </div>
 
+        {commentError && (
+          <p className="mt-2 text-xs text-rose-700 transition-colors duration-300 dark:text-rose-300">{commentError}</p>
+        )}
+
+        {commentTranslateLoading && targetLanguage !== 'en' && (
+          <p className="mt-2 text-xs text-cyan-700 transition-colors duration-300 dark:text-cyan-200">Translating comments...</p>
+        )}
+
         <ul className="mt-2 space-y-1.5">
-          {comments.map((comment, commentIndex) => (
+          {displayComments.map((comment, commentIndex) => (
             <li
-              key={`${article.url || article.title || 'comment'}-${commentIndex}`}
+              key={`${article.url || article.title || 'comment'}-${comment.timestamp || commentIndex}`}
               className="rounded-md bg-gray-100 px-2.5 py-2 text-xs text-slate-700 transition-colors duration-300 dark:bg-slate-800/70 dark:text-slate-300"
             >
-              {comment}
+              <p className="font-semibold text-slate-800 transition-colors duration-300 dark:text-slate-200">
+                {comment.userName || 'Analyst'}
+                <span className="ml-2 font-normal text-slate-600 dark:text-slate-400">
+                  {comment.timestamp ? new Date(comment.timestamp).toLocaleString() : ''}
+                </span>
+              </p>
+              <p className="mt-1">{comment.translatedCommentText || comment.commentText || ''}</p>
             </li>
           ))}
         </ul>

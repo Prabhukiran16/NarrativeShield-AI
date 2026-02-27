@@ -1,17 +1,92 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { LogOut, Mic, MicOff } from 'lucide-react';
 import DataSourceToggle from '../components/DataSourceToggle';
 import ThemeToggle from '../components/ThemeToggle';
+import { useAuth } from '../context/AuthContext';
 import { fetchNews, uploadAndAnalyze } from '../services/intelApi';
 
+const supportedLanguages = [
+  { code: 'en', label: 'English', speechLocale: 'en-IN' },
+  { code: 'hi', label: 'Hindi', speechLocale: 'hi-IN' },
+  { code: 'te', label: 'Telugu', speechLocale: 'te-IN' },
+  { code: 'ta', label: 'Tamil', speechLocale: 'ta-IN' },
+  { code: 'kn', label: 'Kannada', speechLocale: 'kn-IN' },
+];
+
 export default function LandingPage() {
+  const { user, logout } = useAuth();
   const [dataSource, setDataSource] = useState('csv');
   const [topic, setTopic] = useState('Election integrity');
+  const [selectedLanguage, setSelectedLanguage] = useState('en');
   const [selectedFile, setSelectedFile] = useState(null);
   const [fileError, setFileError] = useState('');
   const [loading, setLoading] = useState(false);
   const [requestError, setRequestError] = useState('');
+  const [speechSupported, setSpeechSupported] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef(null);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setSpeechSupported(false);
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    recognition.onresult = (event) => {
+      const transcript = event.results?.[0]?.[0]?.transcript?.trim() || '';
+      if (transcript) {
+        setTopic((previous) => (previous ? `${previous} ${transcript}`.trim() : transcript));
+      }
+      setRequestError('');
+    };
+
+    recognition.onerror = (event) => {
+      setRequestError(`Speech recognition error: ${event.error || 'Unable to capture speech'}`);
+      setIsListening(false);
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+    };
+
+    recognitionRef.current = recognition;
+    setSpeechSupported(true);
+
+    return () => {
+      recognition.stop();
+      recognitionRef.current = null;
+    };
+  }, []);
+
+  const toggleSpeechToText = () => {
+    if (!recognitionRef.current || !speechSupported) {
+      setRequestError('Speech-to-text is not supported in this browser.');
+      return;
+    }
+
+    if (isListening) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+      return;
+    }
+
+    const speechLocale =
+      supportedLanguages.find((language) => language.code === selectedLanguage)?.speechLocale || 'en-IN';
+    recognitionRef.current.lang = speechLocale;
+    setRequestError('');
+    setIsListening(true);
+    recognitionRef.current.start();
+  };
 
   const handleFileChange = (event) => {
     const file = event.target.files?.[0] || null;
@@ -61,17 +136,26 @@ export default function LandingPage() {
 
         const params = new URLSearchParams({
           topic: cleanTopic || 'General Misinformation',
+          lang: selectedLanguage,
         });
         navigate(`/dashboard?${params.toString()}`);
       } else {
         const response = await fetchNews({
           topic: cleanTopic || 'General Misinformation',
+          language: selectedLanguage,
         });
 
-        navigate('/dashboard', {
+        const params = new URLSearchParams({
+          topic: cleanTopic || 'General Misinformation',
+          source: 'api',
+          lang: selectedLanguage,
+        });
+
+        navigate(`/dashboard?${params.toString()}`, {
           state: {
             source: 'api',
             topic: cleanTopic || 'General Misinformation',
+            language: selectedLanguage,
             articles: response.articles || [],
           },
         });
@@ -88,6 +172,13 @@ export default function LandingPage() {
     }
   };
 
+  const handleLogout = async () => {
+    const shouldRedirect = await logout({ confirm: true });
+    if (shouldRedirect) {
+      navigate('/');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-100 px-4 py-8 text-slate-900 transition-colors duration-300 dark:bg-slate-950 dark:text-slate-100">
       <div className="mx-auto flex min-h-[85vh] w-full max-w-3xl items-center">
@@ -96,7 +187,22 @@ export default function LandingPage() {
             <p className="inline-flex rounded-full border border-fuchsia-300/40 bg-fuchsia-50 px-3 py-1 text-xs font-medium uppercase tracking-wide text-fuchsia-700 transition-colors duration-300 dark:border-fuchsia-400/30 dark:bg-fuchsia-500/10 dark:text-fuchsia-200">
               Intelligence Console
             </p>
-            <ThemeToggle />
+            <div className="flex items-center gap-2">
+              <span className="hidden text-xs text-slate-600 transition-colors duration-300 dark:text-slate-300 sm:inline">
+                {user?.name || user?.email}
+              </span>
+              <ThemeToggle />
+              <button
+                type="button"
+                onClick={handleLogout}
+                aria-label="Logout"
+                title="Logout"
+                className="inline-flex items-center gap-1 rounded-lg border border-rose-300/60 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700 transition duration-300 hover:border-rose-400 hover:text-rose-800 dark:border-rose-300/40 dark:bg-rose-500/10 dark:text-rose-100 dark:hover:border-rose-300"
+              >
+                <LogOut size={14} />
+                Logout
+              </button>
+            </div>
           </div>
 
           <h1 className="bg-gradient-to-r from-fuchsia-300 via-purple-300 to-cyan-300 bg-clip-text text-3xl font-bold leading-tight text-transparent md:text-5xl">
@@ -115,14 +221,49 @@ export default function LandingPage() {
             <label htmlFor="topic" className="block text-sm font-medium text-slate-700 transition-colors duration-300 dark:text-slate-200">
               Topic
             </label>
-            <input
-              id="topic"
-              type="text"
-              value={topic}
-              onChange={(event) => setTopic(event.target.value)}
-              placeholder="e.g., Climate policy narratives"
+            <div className="flex items-center gap-2">
+              <input
+                id="topic"
+                type="text"
+                value={topic}
+                onChange={(event) => setTopic(event.target.value)}
+                placeholder="e.g., Climate policy narratives"
+                className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-slate-900 outline-none transition duration-300 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-300/40 dark:border-purple-400/30 dark:bg-slate-800/70 dark:text-slate-100 dark:focus:border-cyan-300 dark:focus:ring-cyan-400/40"
+              />
+              <button
+                type="button"
+                onClick={toggleSpeechToText}
+                disabled={!speechSupported}
+                title={speechSupported ? (isListening ? 'Stop voice input' : 'Start voice input') : 'Speech input not supported'}
+                className="inline-flex h-12 w-12 items-center justify-center rounded-xl border border-gray-300 bg-white text-slate-700 transition duration-300 hover:border-cyan-400 hover:text-cyan-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-purple-400/30 dark:bg-slate-800/70 dark:text-slate-100 dark:hover:border-cyan-300 dark:hover:text-cyan-200"
+              >
+                {isListening ? <MicOff size={18} /> : <Mic size={18} />}
+              </button>
+            </div>
+            {isListening && (
+              <p className="text-xs text-cyan-700 transition-colors duration-300 dark:text-cyan-200" aria-live="polite">
+                Listening... speak now.
+              </p>
+            )}
+
+            <label htmlFor="language" className="block text-sm font-medium text-slate-700 transition-colors duration-300 dark:text-slate-200">
+              Language
+            </label>
+            <select
+              id="language"
+              value={selectedLanguage}
+              onChange={(event) => setSelectedLanguage(event.target.value)}
               className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-slate-900 outline-none transition duration-300 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-300/40 dark:border-purple-400/30 dark:bg-slate-800/70 dark:text-slate-100 dark:focus:border-cyan-300 dark:focus:ring-cyan-400/40"
-            />
+            >
+              {supportedLanguages.map((language) => (
+                <option key={language.code} value={language.code}>
+                  {language.label}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-slate-600 transition-colors duration-300 dark:text-slate-400">
+              Voice input follows the selected language.
+            </p>
 
             {dataSource === 'csv' && (
               <>

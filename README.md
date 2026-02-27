@@ -31,7 +31,21 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
 
+Optional MongoDB persistence (recommended for reactions/comments):
+
+```bash
+MONGODB_URI=mongodb://localhost:27017
+MONGODB_DB=disinfo_intel
+```
+
 ### API Endpoints
+
+#### Session
+
+- `POST /login` (returns session token + user)
+- `POST /logout` (invalidates current session)
+
+#### Analysis
 
 - `POST /analyze`
 - `POST /analyze-upload`
@@ -41,6 +55,41 @@ uvicorn app.main:app --reload
 - `GET /high-risk`
 - `GET /keyword-trends`
 - `GET /temporal-trends`
+
+#### User Interaction Intelligence
+
+- `POST /article-reaction`
+- `GET /article-reactions/{articleId}`
+- `POST /article-comment`
+- `GET /article-comments/{articleId}`
+
+`/article-reaction`, `/article-comment`, and `/logout` require `Authorization: Bearer <token>`.
+
+### MongoDB Schema
+
+`article_reactions`
+
+- `userId` (string)
+- `articleId` (string)
+- `reactionType` (`fake` | `real` | `unsure`)
+- `timestamp` (datetime)
+
+Indexes:
+
+- unique: `(userId, articleId)` to prevent duplicate reactions
+- query index: `(articleId, timestamp)`
+
+`article_comments`
+
+- `userId` (string)
+- `userName` (string)
+- `articleId` (string)
+- `commentText` (string, max 300 chars)
+- `timestamp` (datetime)
+
+Index:
+
+- query index: `(articleId, timestamp)`
 
 ### GNews Real-time Fetch Integration
 

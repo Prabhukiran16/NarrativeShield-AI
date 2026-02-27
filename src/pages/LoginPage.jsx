@@ -1,16 +1,16 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import AboutSection from '../components/AboutSection';
 import ThemeToggle from '../components/ThemeToggle';
-
-const MOCK_USER = {
-  email: 'analyst@disinfo.ai',
-  password: 'intel123',
-};
+import { useAuth } from '../context/AuthContext';
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function LoginPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
+  const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -33,22 +33,23 @@ export default function LoginPage() {
     setLoading(true);
     setError('');
 
-    await new Promise((resolve) => setTimeout(resolve, 800));
-
-    if (cleanEmail !== MOCK_USER.email || password !== MOCK_USER.password) {
-      setError('Invalid credentials. Use analyst@disinfo.ai / intel123');
+    try {
+      await login({ email: cleanEmail, password });
+      navigate('/home');
+    } catch (loginError) {
+      setError(loginError.message || 'Invalid credentials. Use analyst@disinfo.ai / intel123');
       setLoading(false);
       return;
     }
 
-    navigate('/home');
+    setLoading(false);
   };
 
   return (
-    <main className="min-h-screen bg-slate-100 px-4 py-6 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 md:min-h-[90vh]">
-        <nav className="flex items-center justify-between rounded-2xl border border-gray-300 bg-white/80 px-5 py-3 backdrop-blur-md transition-colors duration-300 dark:border-cyan-400/20 dark:bg-slate-900/40">
-          <p className="bg-gradient-to-r from-fuchsia-300 via-purple-300 to-cyan-300 bg-clip-text text-sm font-semibold text-transparent md:text-base">
+    <main className="min-h-screen bg-slate-50 px-4 py-6 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-8">
+        <nav className="flex items-center justify-between rounded-2xl border border-gray-200 bg-white/85 px-5 py-3 shadow-sm backdrop-blur-sm transition-colors duration-300 dark:border-gray-700 dark:bg-slate-900/70">
+          <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 md:text-base">
             AI Disinformation Intelligence Platform
           </p>
           <div className="flex items-center gap-3">
@@ -57,19 +58,19 @@ export default function LoginPage() {
           </div>
         </nav>
 
-        <section className="grid flex-1 grid-cols-1 items-center gap-6 lg:grid-cols-2">
+        <section className="grid grid-cols-1 items-center gap-6 lg:grid-cols-2">
           <div className="space-y-4">
-            <p className="inline-flex rounded-full border border-fuchsia-300/40 bg-fuchsia-50 px-3 py-1 text-xs uppercase tracking-wide text-fuchsia-700 transition-colors duration-300 dark:border-fuchsia-400/30 dark:bg-fuchsia-500/10 dark:text-fuchsia-200">
+            <p className="inline-flex rounded-full border border-gray-200 bg-white px-3 py-1 text-xs uppercase tracking-wide text-slate-700 shadow-sm transition-colors duration-300 dark:border-gray-700 dark:bg-slate-900 dark:text-slate-200">
               Intelligence Workspace
             </p>
-            <h1 className="bg-gradient-to-r from-fuchsia-300 via-purple-300 to-cyan-300 bg-clip-text text-3xl font-bold leading-tight text-transparent md:text-5xl">
+            <h1 className="text-3xl font-bold leading-tight text-slate-900 dark:text-slate-100 md:text-5xl">
               Detect Narrative Threats with Real-Time AI Intelligence
             </h1>
             <p className="max-w-xl text-sm text-slate-700 transition-colors duration-300 dark:text-slate-300 md:text-base">
               Sign in to access fake-risk analytics, explainable narrative signals, and
               interactive misinformation intelligence dashboards.
             </p>
-            <div className="illustration-container">
+            <div className="rounded-2xl border border-gray-200 bg-white/85 p-4 shadow-sm dark:border-gray-700 dark:bg-slate-900/70">
               <img
                 src="/src/assets/Data analysis-bro.svg"
                 alt="AI Intelligence"
@@ -78,8 +79,8 @@ export default function LoginPage() {
             </div>
           </div>
 
-          <div className="mx-auto w-full max-w-md rounded-3xl border border-gray-300 bg-white/85 p-6 shadow-[0_0_30px_rgba(15,23,42,0.08)] backdrop-blur-xl transition-colors duration-300 dark:border-cyan-400/25 dark:bg-slate-900/50 dark:shadow-[0_0_36px_rgba(168,85,247,0.25)] md:p-8">
-            <h2 className="text-2xl font-semibold text-slate-900 transition-colors duration-300 dark:text-slate-100">Log in</h2>
+          <div className="mx-auto w-full max-w-md rounded-2xl border border-gray-200 bg-white/90 p-6 shadow-md backdrop-blur-sm transition-colors duration-300 dark:border-gray-700 dark:bg-slate-900/75 md:p-8">
+            <h2 className="text-2xl font-semibold text-slate-900 transition-colors duration-300 dark:text-slate-100">{t('login')}</h2>
             <p className="mt-1 text-sm text-slate-600 transition-colors duration-300 dark:text-slate-400">Continue to your intelligence console</p>
 
             <form className="mt-6 space-y-4" onSubmit={handleLogin}>
@@ -93,7 +94,7 @@ export default function LoginPage() {
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
                   placeholder="analyst@disinfo.ai"
-                  className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-slate-900 outline-none transition duration-300 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-300/40 dark:border-purple-400/30 dark:bg-slate-800/75 dark:text-slate-100 dark:focus:border-cyan-300 dark:focus:ring-cyan-400/40"
+                  className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-slate-900 outline-none transition duration-300 focus:border-blue-300 focus:ring-2 focus:ring-blue-200/60 dark:border-gray-700 dark:bg-slate-800/75 dark:text-slate-100 dark:focus:border-blue-400 dark:focus:ring-blue-500/20"
                 />
               </div>
 
@@ -107,7 +108,7 @@ export default function LoginPage() {
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
                   placeholder="••••••••"
-                  className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-slate-900 outline-none transition duration-300 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-300/40 dark:border-purple-400/30 dark:bg-slate-800/75 dark:text-slate-100 dark:focus:border-cyan-300 dark:focus:ring-cyan-400/40"
+                  className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-slate-900 outline-none transition duration-300 focus:border-blue-300 focus:ring-2 focus:ring-blue-200/60 dark:border-gray-700 dark:bg-slate-800/75 dark:text-slate-100 dark:focus:border-blue-400 dark:focus:ring-blue-500/20"
                 />
               </div>
 
@@ -120,7 +121,7 @@ export default function LoginPage() {
               <button
                 type="submit"
                 disabled={loading}
-                className="inline-flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-fuchsia-600 to-cyan-500 px-5 py-3 font-semibold text-white transition duration-300 hover:scale-[1.01] hover:shadow-[0_0_28px_rgba(168,85,247,0.55)] disabled:cursor-not-allowed disabled:opacity-70"
+                className="inline-flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-3 font-semibold text-white transition duration-300 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-70"
               >
                 {loading && (
                   <span className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
@@ -130,15 +131,17 @@ export default function LoginPage() {
             </form>
 
             <div className="mt-4 flex items-center justify-between text-sm">
-              <Link to="#" className="text-cyan-700 transition duration-300 hover:text-cyan-800 dark:text-cyan-300 dark:hover:text-cyan-200">
+              <Link to="#" className="text-slate-600 transition duration-300 hover:text-slate-900 dark:text-slate-300 dark:hover:text-slate-100">
                 Forgot password?
               </Link>
-              <Link to="#" className="text-fuchsia-700 transition duration-300 hover:text-fuchsia-800 dark:text-fuchsia-300 dark:hover:text-fuchsia-200">
-                Sign up
+              <Link to="/signup" className="text-blue-700 transition duration-300 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200">
+                {t('signup')}
               </Link>
             </div>
           </div>
         </section>
+
+        <AboutSection />
       </div>
     </main>
   );

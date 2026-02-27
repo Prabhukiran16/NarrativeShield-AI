@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import LikeDislike from './LikeDislike';
 
 const sentimentStyles = {
   Negative: 'bg-rose-100 text-rose-800 border-rose-300 dark:bg-rose-500/20 dark:text-rose-200 dark:border-rose-400/40',
@@ -13,8 +14,6 @@ const riskStyles = {
 };
 
 export default function ArticleCard({ article }) {
-  const [likes, setLikes] = useState(article.likes ?? 0);
-  const [dislikes, setDislikes] = useState(article.dislikes ?? 0);
   const [commentInput, setCommentInput] = useState('');
   const [comments, setComments] = useState(article.comments ?? []);
   const [showExplanation, setShowExplanation] = useState(false);
@@ -61,20 +60,7 @@ export default function ArticleCard({ article }) {
       </div>
 
       <div className="mt-5 flex flex-wrap items-center gap-3">
-        <button
-          type="button"
-          onClick={() => setLikes((prev) => prev + 1)}
-          className="rounded-lg bg-cyan-100 px-3 py-1.5 text-sm font-medium text-cyan-800 transition duration-300 hover:bg-cyan-200 dark:bg-cyan-500/20 dark:text-cyan-100 dark:hover:bg-cyan-500/35"
-        >
-          Like ({likes})
-        </button>
-        <button
-          type="button"
-          onClick={() => setDislikes((prev) => prev + 1)}
-          className="rounded-lg bg-rose-100 px-3 py-1.5 text-sm font-medium text-rose-800 transition duration-300 hover:bg-rose-200 dark:bg-rose-500/20 dark:text-rose-100 dark:hover:bg-rose-500/35"
-        >
-          Dislike ({dislikes})
-        </button>
+        <LikeDislike article={article} />
         <button
           type="button"
           onClick={() => setShowExplanation((prev) => !prev)}
